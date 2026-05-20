@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "airbnb-mobile",
-    "slug": "airbnb-mobile",
+    "slug": "air-bnb",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -17,11 +17,19 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.jeid12.airbnb"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
+    },
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/9cc65b66-a930-49b0-9380-e49d7c54d6b1"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "plugins": [
       "expo-router",
@@ -39,6 +47,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9cc65b66-a930-49b0-9380-e49d7c54d6b1"
+      }
+    },
+    "owner": "jeid12"
   }
 }

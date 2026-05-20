@@ -1,16 +1,39 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { useColorScheme } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="listing/[id]"
+          options={{ headerShown: false, animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="search"
+          options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="photos"
+          options={{ presentation: 'fullScreenModal', headerShown: false }}
+        />
+        <Stack.Screen
+          name="amenities"
+          options={{ presentation: 'modal', headerShown: false }}
+        />
+        <Stack.Screen
+          name="reviews"
+          options={{ presentation: 'modal', headerShown: false }}
+        />
+        <Stack.Screen
+          name="report"
+          options={{ presentation: 'modal', headerShown: false }}
+        />
+      </Stack>
+    </SafeAreaProvider>
   );
 }
