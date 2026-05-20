@@ -30,7 +30,7 @@ export interface ApiListingItem {
   _count: { bookings: number };
 }
 
-export interface ApiListingDetail extends ApiListingItem {
+export interface ApiListingDetail extends Omit<ApiListingItem, '_count'> {
   description: string;
   bedrooms: number;
   beds: number;
