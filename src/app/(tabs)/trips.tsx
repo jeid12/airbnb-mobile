@@ -1,132 +1,181 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/constants/theme';
-import { trips } from '@/data/trips';
-import { listings } from '@/data/listings';
-import type { Trip } from '@/features/listings/types';
+import { useAuth } from '@/context/auth';
+import { api, getListingImages, parseLocation, type ApiBooking } from '@/services/api';
 
 function formatDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatYear(iso: string) {
   return new Date(iso).getFullYear();
 }
 
-function TripCard({ trip }: { trip: Trip }) {
+function formatPrice(n: number) {
+  return `$${n.toLocaleString()}`;
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+const STATUS_COLORS: Record<string, string> = {
+  CONFIRMED: '#008A05',
+  PENDING: '#E67700',
+  CANCELLED: '#717171',
+};
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <View style={[styles.badge, { backgroundColor: STATUS_COLORS[status] + '20' }]}>
+      <Text style={[styles.badgeText, { color: STATUS_COLORS[status] ?? Colors.textSecondary }]}>
+        {status.charAt(0) + status.slice(1).toLowerCase()}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Trip Card ────────────────────────────────────────────────────────────────
+function TripCard({ booking }: { booking: ApiBooking }) {
+  const loc = parseLocation(booking.listing.location);
+  const images = getListingImages({ type: 'APARTMENT' }); // fallback image
+
   return (
     <Pressable
       style={styles.tripCard}
-      onPress={() => router.push(`/listing/${trip.listing.id}`)}>
-      <Image
-        source={{ uri: trip.listing.image }}
-        style={styles.tripImage}
-        contentFit="cover"
-      />
+      onPress={() => router.push(`/listing/${booking.listingId}`)}>
+      <Image source={{ uri: images[0] }} style={styles.tripImage} contentFit="cover" />
       <View style={styles.tripInfo}>
         <Text style={styles.tripTitle} numberOfLines={2}>
-          {trip.listing.title}
+          {booking.listing.title}
         </Text>
-        <Text style={styles.tripMeta}>
-          {trip.listing.city}, {trip.listing.country}
-        </Text>
+        <Text style={styles.tripMeta}>{loc.city}{loc.region ? `, ${loc.region}` : ''}</Text>
         <Text style={styles.tripDates}>
-          {formatDate(trip.checkIn)} – {formatDate(trip.checkOut)},{' '}
-          {formatYear(trip.checkIn)}
+          {formatDate(booking.checkIn)} – {formatDate(booking.checkOut)},{' '}
+          {formatYear(booking.checkIn)}
         </Text>
-        <Text style={styles.tripHost}>Hosted by {trip.host.name}</Text>
+        <View style={styles.tripBottom}>
+          <Text style={styles.tripPrice}>{formatPrice(booking.totalPrice)} total</Text>
+          <StatusBadge status={booking.status} />
+        </View>
       </View>
     </Pressable>
   );
 }
 
-function ExploreCard({
-  img,
-  name,
-  count,
-}: {
-  img: string;
-  name: string;
-  count: string;
-}) {
+// ─── Auth gate ────────────────────────────────────────────────────────────────
+function AuthGate() {
   return (
-    <Pressable style={styles.exploreCard}>
-      <Image source={{ uri: img }} style={styles.exploreImage} contentFit="cover" />
-      <View style={styles.exploreOverlay}>
-        <Text style={styles.exploreName}>{name}</Text>
-        <Text style={styles.exploreCount}>{count}</Text>
-      </View>
-    </Pressable>
+    <View style={styles.authGate}>
+      <Ionicons name="airplane-outline" size={48} color={Colors.border} />
+      <Text style={styles.authTitle}>Log in to see your trips</Text>
+      <Text style={styles.authSub}>
+        Once you log in or create an account, your confirmed bookings will appear here.
+      </Text>
+      <Pressable style={styles.authBtn} onPress={() => router.push('/login')}>
+        <Text style={styles.authBtnText}>Log in</Text>
+      </Pressable>
+      <Pressable onPress={() => router.push('/register')}>
+        <Text style={styles.authLink}>Create account</Text>
+      </Pressable>
+    </View>
   );
 }
 
+// ─── Trips Screen ─────────────────────────────────────────────────────────────
 export default function TripsScreen() {
-  const upcomingTrips = trips.filter((t) => t.status === 'upcoming');
-  const nearbyCity = upcomingTrips[0]?.listing.city ?? 'Yonkers';
+  const { token, user } = useAuth();
+  const [bookings, setBookings] = useState<ApiBooking[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await api.getBookings(token!);
+        if (!cancelled) {
+          // Filter to only this user's bookings
+          const mine = res.data.filter((b) => b.guestId === user?.id);
+          setBookings(mine);
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e.message ?? 'Failed to load trips');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [token, user?.id]);
+
+  const upcoming = bookings.filter((b) => b.status !== 'CANCELLED' && new Date(b.checkIn) >= new Date());
+  const past = bookings.filter((b) => b.status !== 'CANCELLED' && new Date(b.checkIn) < new Date());
+  const cancelled = bookings.filter((b) => b.status === 'CANCELLED');
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Trips</Text>
-          <Ionicons name="person-circle-outline" size={28} color={Colors.text} />
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.title}>Trips</Text>
+        <Ionicons name="person-circle-outline" size={28} color={Colors.text} />
+      </View>
 
-        {/* Upcoming reservations */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming reservations</Text>
-          {upcomingTrips.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="airplane-outline" size={40} color={Colors.border} />
-              <Text style={styles.emptyTitle}>No upcoming trips</Text>
-              <Text style={styles.emptyText}>
-                Time to plan your next adventure. Start exploring destinations.
-              </Text>
-              <Pressable
-                style={styles.exploreBtn}
-                onPress={() => router.push('/home')}>
-                <Text style={styles.exploreBtnText}>Start exploring</Text>
-              </Pressable>
+      {!token ? (
+        <AuthGate />
+      ) : loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Upcoming */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Upcoming reservations</Text>
+            {upcoming.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Ionicons name="airplane-outline" size={40} color={Colors.border} />
+                <Text style={styles.emptyTitle}>No upcoming trips</Text>
+                <Text style={styles.emptyText}>
+                  Time to plan your next adventure. Start exploring destinations.
+                </Text>
+                <Pressable style={styles.exploreBtn} onPress={() => router.push('/(tabs)/home')}>
+                  <Text style={styles.exploreBtnText}>Start exploring</Text>
+                </Pressable>
+              </View>
+            ) : (
+              upcoming.map((b) => <TripCard key={b.id} booking={b} />)
+            )}
+          </View>
+
+          {/* Past */}
+          {past.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Past trips</Text>
+              {past.map((b) => <TripCard key={b.id} booking={b} />)}
             </View>
-          ) : (
-            upcomingTrips.map((trip) => <TripCard key={trip.id} trip={trip} />)
           )}
-        </View>
 
-        {/* Explore things to do nearby */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Explore things to do near {nearbyCity}
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.exploreScroll}>
-            <ExploreCard
-              img={listings[0].images[0]}
-              name="Stays"
-              count={`${listings.length} places`}
-            />
-            <ExploreCard
-              img={listings[2].images[0]}
-              name="Experiences"
-              count="12 available"
-            />
-            <ExploreCard
-              img={listings[3].images[0]}
-              name="Adventures"
-              count="5 nearby"
-            />
-          </ScrollView>
-        </View>
-      </ScrollView>
+          {/* Cancelled */}
+          {cancelled.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Cancelled</Text>
+              {cancelled.map((b) => <TripCard key={b.id} booking={b} />)}
+            </View>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -135,90 +184,62 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
 
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
   },
   title: { fontSize: FontSize.xxl, fontWeight: '700', color: Colors.text },
 
-  section: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorText: { fontSize: FontSize.base, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: Spacing.lg },
+
+  // Auth gate
+  authGate: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: Spacing.xl, gap: Spacing.md,
   },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: Spacing.md,
+  authTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text, textAlign: 'center' },
+  authSub: { fontSize: FontSize.base, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  authBtn: {
+    backgroundColor: Colors.brand, borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.xl, paddingVertical: 14, marginTop: Spacing.sm,
   },
+  authBtnText: { color: Colors.white, fontSize: FontSize.base, fontWeight: '700' },
+  authLink: {
+    fontSize: FontSize.base, color: Colors.text,
+    fontWeight: '600', textDecorationLine: 'underline',
+  },
+
+  section: { paddingHorizontal: Spacing.md, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
+  sectionTitle: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.text, marginBottom: Spacing.md },
 
   // Trip card
   tripCard: {
-    flexDirection: 'row',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.sm,
+    flexDirection: 'row', backgroundColor: Colors.white,
+    borderRadius: Radius.xl, overflow: 'hidden',
+    marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
   },
-  tripImage: { width: 100, height: 110 },
+  tripImage: { width: 100, height: 120 },
   tripInfo: { flex: 1, padding: Spacing.md, gap: 3 },
   tripTitle: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
   tripMeta: { fontSize: FontSize.sm, color: Colors.textSecondary },
   tripDates: { fontSize: FontSize.sm, color: Colors.text, fontWeight: '500' },
-  tripHost: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  tripBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  tripPrice: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full },
+  badgeText: { fontSize: FontSize.xs, fontWeight: '600' },
 
   // Empty state
   emptyBox: {
-    alignItems: 'center',
-    padding: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    gap: Spacing.sm,
+    alignItems: 'center', padding: Spacing.xl,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.xl, gap: Spacing.sm,
   },
   emptyTitle: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-  emptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
+  emptyText: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
   exploreBtn: {
-    marginTop: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: Colors.text,
+    marginTop: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+    borderRadius: Radius.full, borderWidth: 1.5, borderColor: Colors.text,
   },
   exploreBtnText: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
-
-  // Explore nearby
-  exploreScroll: { gap: Spacing.md, paddingRight: Spacing.md },
-  exploreCard: {
-    width: 140,
-    height: 120,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    position: 'relative',
-    ...Shadow.sm,
-  },
-  exploreImage: { width: '100%', height: '100%' },
-  exploreOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  exploreName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.white },
-  exploreCount: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.85)' },
 });

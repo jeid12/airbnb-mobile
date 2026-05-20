@@ -1,93 +1,81 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors, FontSize, Radius, Spacing } from '@/constants/theme';
-import { listings } from '@/data/listings';
+import { api, type ApiListingDetail } from '@/services/api';
 
 export default function AmenitiesModal() {
   const { listingId } = useLocalSearchParams<{ listingId: string }>();
-  const listing = listings.find((l) => l.id === listingId);
+  const [listing, setListing] = useState<ApiListingDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!listing) return null;
+  useEffect(() => {
+    if (!listingId) return;
+    api.getListing(listingId)
+      .then(setListing)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [listingId]);
 
   return (
     <View style={styles.container}>
-      {/* Handle */}
       <View style={styles.handle} />
 
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
           <Ionicons name="close" size={22} color={Colors.text} />
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>What this place offers</Text>
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={Colors.brand} />
+        </View>
+      ) : !listing ? (
+        <View style={styles.centered}>
+          <Text style={styles.errText}>Could not load amenities.</Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          <Text style={styles.title}>What this place offers</Text>
+          <Text style={styles.subtitle}>{listing.amenities.length} amenities</Text>
 
-        {listing.amenities.map((group) => (
-          <View key={group.category} style={styles.group}>
-            <Text style={styles.groupTitle}>{group.category}</Text>
-            {group.items.map((item) => (
-              <View key={item.name} style={[styles.amenityRow, !item.available && styles.unavailable]}>
-                <Ionicons
-                  name={item.available ? 'checkmark' : 'close'}
-                  size={20}
-                  color={item.available ? Colors.text : Colors.textSecondary}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.amenityName, !item.available && styles.strikethrough]}>
-                    {item.name}
-                  </Text>
-                  {item.note && (
-                    <Text style={styles.amenityNote}>{item.note}</Text>
-                  )}
-                </View>
+          <View style={styles.amenityList}>
+            {listing.amenities.map((amenity, i) => (
+              <View key={i} style={styles.amenityRow}>
+                <Ionicons name="checkmark" size={20} color={Colors.text} />
+                <Text style={styles.amenityName}>{amenity}</Text>
               </View>
             ))}
           </View>
-        ))}
-      </ScrollView>
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
-
   handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginTop: 12,
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: Colors.border, alignSelf: 'center', marginTop: 12,
   },
   header: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
   },
-  content: { padding: Spacing.md, gap: Spacing.lg, paddingBottom: 48 },
-
-  title: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
-
-  group: { gap: Spacing.sm },
-  groupTitle: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errText: { fontSize: FontSize.base, color: Colors.textSecondary },
+  content: { padding: Spacing.md, paddingBottom: 48 },
+  title: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text, marginBottom: 4 },
+  subtitle: { fontSize: FontSize.base, color: Colors.textSecondary, marginBottom: Spacing.lg },
+  amenityList: { gap: 0 },
   amenityRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
   },
-  unavailable: { opacity: 0.5 },
-  amenityName: { fontSize: FontSize.base, color: Colors.text },
-  strikethrough: { textDecorationLine: 'line-through', color: Colors.textSecondary },
-  amenityNote: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2, lineHeight: 16 },
+  amenityName: { fontSize: FontSize.base, color: Colors.text, flex: 1 },
 });
