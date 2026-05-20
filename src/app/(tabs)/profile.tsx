@@ -84,6 +84,10 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 
+  const role = (user.role ?? 'GUEST') as string;
+  const isHost = role === 'HOST';
+  const isAdmin = role === 'ADMIN';
+
   const accountSettings: SettingRow[] = [
     { icon: 'person-outline', label: 'Personal information' },
     { icon: 'card-outline', label: 'Payments and payouts' },
@@ -91,6 +95,23 @@ export default function ProfileScreen() {
     { icon: 'shield-checkmark-outline', label: 'Privacy and sharing' },
     { icon: 'briefcase-outline', label: 'Travel for work' },
   ];
+
+  const push = (path: string) => () => router.push(path as any);
+
+  const roleRows: SettingRow[] = isAdmin
+    ? [
+        { icon: 'shield-outline', label: 'Admin Dashboard', onPress: push('/admin') },
+        { icon: 'people-outline', label: 'Manage Users', onPress: push('/admin/users') },
+        { icon: 'checkmark-circle-outline', label: 'Moderation Queue', onPress: push('/admin/moderation') },
+      ]
+    : isHost
+    ? [
+        { icon: 'home-outline', label: 'Host Dashboard', onPress: push('/host') },
+        { icon: 'list-outline', label: 'My Listings', onPress: push('/host/listings') },
+        { icon: 'add-circle-outline', label: 'Add New Listing', onPress: push('/host/create') },
+        { icon: 'calendar-outline', label: 'Booking Requests', onPress: push('/host/bookings') },
+      ]
+    : [];
 
   function handleLogout() {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -169,6 +190,14 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </Pressable>
+
+        {/* Role-specific section */}
+        {roleRows.length > 0 && (
+          <SettingsSection
+            title={isAdmin ? 'Admin' : 'Hosting'}
+            rows={roleRows}
+          />
+        )}
 
         {/* Account settings */}
         <SettingsSection title="Account Settings" rows={accountSettings} />

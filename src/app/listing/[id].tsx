@@ -92,38 +92,17 @@ function RatingBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-// ─── Booking modal state ──────────────────────────────────────────────────────
+// ─── Reserve footer — opens 4-step booking form ───────────────────────────────
 function ReserveFooter({ listing }: { listing: ApiListingDetail }) {
   const { token } = useAuth();
   const [booking, setBooking] = useState(false);
 
-  async function handleReserve() {
+  function handleReserve() {
     if (!token) {
       router.push('/login');
       return;
     }
-    if (booking) return;
-    setBooking(true);
-    try {
-      const checkIn = new Date();
-      checkIn.setDate(checkIn.getDate() + 1);
-      const checkOut = new Date(checkIn);
-      checkOut.setDate(checkOut.getDate() + 3);
-      await api.createBooking(token, {
-        listingId: listing.id,
-        checkIn: checkIn.toISOString().split('T')[0],
-        checkOut: checkOut.toISOString().split('T')[0],
-        guests: 1,
-      });
-      Alert.alert('Booking confirmed!', 'Your reservation has been placed successfully.', [
-        { text: 'View trips', onPress: () => router.push('/(tabs)/trips') },
-        { text: 'OK' },
-      ]);
-    } catch (e: any) {
-      Alert.alert('Booking failed', e.message ?? 'Please try again.');
-    } finally {
-      setBooking(false);
-    }
+    router.push(`/booking/${listing.id}` as any);
   }
 
   return (

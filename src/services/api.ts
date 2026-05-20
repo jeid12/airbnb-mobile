@@ -26,7 +26,7 @@ export interface ApiListingItem {
   amenities: string[];
   rating: number;
   createdAt: string;
-  host: { name: string; avatar: string | null };
+  host: { name: string; avatar: string | null; isSuperhost?: boolean };
   _count: { bookings: number };
 }
 

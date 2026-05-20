@@ -4,25 +4,18 @@ import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/context/auth';
 
-function TabBarIcon({
-  name,
-  color,
-  focused,
-}: {
-  name: React.ComponentProps<typeof Ionicons>['name'];
-  color: string;
-  focused: boolean;
-}) {
-  return (
-    <View style={styles.iconWrap}>
-      <Ionicons name={name} size={24} color={color} />
-      {focused && <View style={[styles.dot, { backgroundColor: Colors.text }]} />}
-    </View>
-  );
+function TabBarIcon({ name, color }: { name: React.ComponentProps<typeof Ionicons>['name']; color: string }) {
+  return <Ionicons name={name} size={24} color={color} />;
 }
 
 export default function TabLayout() {
+  const { user } = useAuth();
+  const role = (user?.role ?? 'GUEST') as string;
+  const isHost = role === 'HOST';
+  const isAdmin = role === 'ADMIN';
+
   return (
     <Tabs
       screenOptions={{
@@ -31,14 +24,15 @@ export default function TabLayout() {
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabBarLabel,
-        tabBarShowLabel: true,
       }}>
+
+      {/* ── Guest tabs (always visible) ── */}
       <Tabs.Screen
         name="home"
         options={{
           title: 'Explore',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'search' : 'search-outline'} color={color} focused={false} />
+            <TabBarIcon name={focused ? 'search' : 'search-outline'} color={color} />
           ),
         }}
       />
@@ -46,8 +40,9 @@ export default function TabLayout() {
         name="wishlist"
         options={{
           title: 'Wishlists',
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'heart' : 'heart-outline'} color={color} focused={false} />
+            <TabBarIcon name={focused ? 'heart' : 'heart-outline'} color={color} />
           ),
         }}
       />
@@ -55,8 +50,9 @@ export default function TabLayout() {
         name="trips"
         options={{
           title: 'Trips',
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'airplane' : 'airplane-outline'} color={color} focused={false} />
+            <TabBarIcon name={focused ? 'airplane' : 'airplane-outline'} color={color} />
           ),
         }}
       />
@@ -64,8 +60,9 @@ export default function TabLayout() {
         name="inbox"
         options={{
           title: 'Inbox',
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'chatbubble' : 'chatbubble-outline'} color={color} focused={false} />
+            <TabBarIcon name={focused ? 'chatbubble' : 'chatbubble-outline'} color={color} />
           ),
         }}
       />
@@ -74,7 +71,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'person-circle' : 'person-circle-outline'} color={color} focused={false} />
+            <TabBarIcon name={focused ? 'person-circle' : 'person-circle-outline'} color={color} />
           ),
         }}
       />
@@ -91,18 +88,5 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 28 : 8,
     paddingTop: 8,
   },
-  tabBarLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: -4,
-  },
-  iconWrap: {
-    alignItems: 'center',
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 3,
-  },
+  tabBarLabel: { fontSize: 10, fontWeight: '500' },
 });

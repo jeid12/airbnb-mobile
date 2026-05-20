@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useState } from 'react';
 
 import { api, type ApiUser, type ApiBooking } from '@/services/api';
 
+export type UserRole = 'GUEST' | 'HOST' | 'ADMIN';
 type AuthUser = ApiUser & { bookings?: ApiBooking[] };
 
 interface AuthContextValue {
