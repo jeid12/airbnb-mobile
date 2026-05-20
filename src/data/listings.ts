@@ -104,7 +104,7 @@ export const listings: Listing[] = [
       '2 guests maximum',
       'No smoking',
       'No pets',
-      'No parties or events',
+      'No parties or events.',
     ],
     safetyHighlights: [
       'Security camera/recording device',
