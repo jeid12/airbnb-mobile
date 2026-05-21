@@ -149,8 +149,21 @@ async function request<T>(
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
+    // Disable HTTP caching so the server never responds with 304 (no-body).
+    // React Native's fetch doesn't maintain a browser cache, so 304 would
+    // produce an empty body and silently break real-time endpoints.
+    cache: 'no-store',
+    headers: {
+      ...headers,
+      ...(options.headers as Record<string, string> ?? {}),
+      'Cache-Control': 'no-cache',
+    },
   });
+
+  // 304 Not Modified — treat as success with no new data (use TanStack cache)
+  if (res.status === 304) {
+    return undefined as unknown as T;
+  }
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
