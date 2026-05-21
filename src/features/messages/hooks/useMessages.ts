@@ -11,8 +11,8 @@ export function useConversations(): UseQueryResult<ApiMessage[], Error> {
     queryKey: ['conversations'],
     queryFn: () => api.getConversations(token!),
     enabled: !!token,
-    refetchInterval: 15_000, // poll every 15s for new messages
-    staleTime: 5_000,
+    refetchInterval: 30_000, // poll every 30s — 304s mean no data is transferred
+    staleTime: 20_000,
   });
 }
 
@@ -22,7 +22,7 @@ export function useThread(peerId: string): UseQueryResult<ApiMessage[], Error> {
     queryKey: ['thread', peerId],
     queryFn: () => api.getThread(token!, peerId),
     enabled: !!token && !!peerId,
-    refetchInterval: 5_000, // poll more frequently in active thread
+    refetchInterval: 10_000, // poll every 10s inside an active thread
     staleTime: 0,
   });
 }
@@ -60,8 +60,8 @@ export function useUnreadCount(): number {
     queryKey: ['unread-count'],
     queryFn: () => api.getUnreadCount(token!),
     enabled: !!token,
-    refetchInterval: 30_000,
-    staleTime: 10_000,
+    refetchInterval: 60_000, // badge check every 60s
+    staleTime: 30_000,
   });
   return data?.count ?? 0;
 }
