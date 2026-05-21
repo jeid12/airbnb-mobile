@@ -201,6 +201,11 @@ export const api = {
     return request('/auth/me', {}, token);
   },
 
+  // POST /auth/me/become-host — upgrade role to HOST, returns new token + user
+  becomeHost(token: string): Promise<{ token: string; user: ApiUser }> {
+    return request('/auth/me/become-host', { method: 'POST' }, token);
+  },
+
   // PUT /auth/me — update own name, username, phone, bio, avatar
   updateMe(token: string, data: {
     name?: string; username?: string; phone?: string; bio?: string; avatar?: string | null;

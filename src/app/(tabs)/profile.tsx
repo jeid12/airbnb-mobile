@@ -105,10 +105,14 @@ export default function ProfileScreen() {
 
   const hostRows: SettingRow[] = [
     ...(isHost || isAdmin
-      ? [{ icon: 'home-outline' as const, label: 'Host dashboard', sub: 'Manage listings and bookings', route: '/host' }]
+      ? [{ icon: 'home-outline' as const, label: 'Host dashboard', sub: 'Manage your listings and bookings', route: '/host' }]
       : []),
     ...(isAdmin
       ? [{ icon: 'settings-outline' as const, label: 'Admin panel', sub: 'Platform management', route: '/admin' }]
+      : []),
+    // GUEST sees a "Become a Host" CTA
+    ...(!isHost && !isAdmin
+      ? [{ icon: 'rocket-outline' as const, label: 'Become a Host', sub: 'List your space and earn extra income', route: '/become-host' }]
       : []),
   ];
 
@@ -185,9 +189,12 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
         </Pressable>
 
-        {/* Hosting / Admin */}
+        {/* Hosting / Admin / Become a Host */}
         {hostRows.length > 0 && (
-          <SettingsSection title="Hosting" rows={hostRows} />
+          <SettingsSection
+            title={isHost || isAdmin ? 'Hosting' : 'Earn with Airbnb'}
+            rows={hostRows}
+          />
         )}
 
         {/* Account settings — all wired to real screens */}

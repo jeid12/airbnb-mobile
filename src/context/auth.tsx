@@ -12,6 +12,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; username: string; phone: string; password: string }) => Promise<void>;
   updateProfile: (data: { name?: string; username?: string; phone?: string; bio?: string; avatar?: string | null }) => Promise<void>;
+  becomeHost: () => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -60,6 +61,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [token],
   );
 
+  // Upgrades the current user from GUEST → HOST.
+  // The backend issues a fresh JWT with role:"HOST", so we swap it in-place
+  // without requiring the user to log out and back in.
+  const becomeHost = useCallback(async () => {
+    if (!token) throw new Error('Not authenticated');
+    const res = await api.becomeHost(token);
+    setToken(res.token);
+    setUser(res.user);
+  }, [token]);
+
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
@@ -72,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, updateProfile, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, updateProfile, becomeHost, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
