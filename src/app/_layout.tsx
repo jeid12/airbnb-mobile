@@ -34,6 +34,7 @@ export default function RootLayout() {
               <Stack.Screen name="report" options={{ presentation: 'modal', headerShown: false }} />
               <Stack.Screen name="host" options={{ headerShown: false }} />
               <Stack.Screen name="admin" options={{ headerShown: false }} />
+              <Stack.Screen name="settings" options={{ headerShown: false }} />
             </Stack>
             <Toast />
           </AuthProvider>

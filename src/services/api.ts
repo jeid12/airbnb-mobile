@@ -159,6 +159,25 @@ export const api = {
     return request('/auth/me', {}, token);
   },
 
+  // PUT /auth/me — update own name, username, phone, bio, avatar
+  updateMe(token: string, data: {
+    name?: string; username?: string; phone?: string; bio?: string; avatar?: string | null;
+  }): Promise<ApiUser> {
+    return request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+
+  // GET/POST/PUT /users/:id/profile — extended profile (bio, website, country)
+  getExtendedProfile(userId: string): Promise<{ bio?: string; website?: string; country?: string } | null> {
+    return request(`/users/${userId}/profile`).catch(() => null);
+  },
+
+  upsertExtendedProfile(token: string, userId: string, data: { bio?: string; website?: string; country?: string }, exists: boolean): Promise<object> {
+    return request(`/users/${userId}/profile`, {
+      method: exists ? 'PUT' : 'POST',
+      body: JSON.stringify(data),
+    }, token);
+  },
+
   changePassword(token: string, currentPassword: string, newPassword: string): Promise<{ message: string }> {
     return request('/auth/change-password', {
       method: 'POST',
