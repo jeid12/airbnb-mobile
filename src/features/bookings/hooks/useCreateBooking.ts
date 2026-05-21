@@ -7,9 +7,9 @@ import type { ApiBooking } from '../../../services/api';
 
 interface BookingPayload {
   listingId: string;
-  checkIn: string;
+  checkIn: string;    // ISO datetime e.g. "2027-07-01T12:00:00Z"
   checkOut: string;
-  guests: number;
+  guests?: number;
 }
 
 export function useCreateBooking(): {
@@ -21,7 +21,7 @@ export function useCreateBooking(): {
 
   const mutation = useMutation<ApiBooking, Error, BookingPayload>({
     mutationFn: (data) => {
-      if (!token) throw new Error('Not authenticated');
+      if (!token) throw new Error('You must be logged in to book a listing.');
       return api.createBooking(token, data);
     },
     onSuccess: (booking) => {

@@ -1,118 +1,54 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/constants/theme';
-import { useAuth } from '@/context/auth';
-import { api, getListingImages, parseLocation, type ApiWishlist } from '@/services/api';
+import { useFavorites } from '@/features/listings/hooks/useFavorites';
+import { getListingImages, parseLocation } from '@/services/api';
+import type { ApiListingItem } from '@/services/api';
 
-// ─── Wishlist Card ────────────────────────────────────────────────────────────
-function WishlistCard({ wishlist, onPress }: { wishlist: ApiWishlist; onPress: () => void }) {
-  const items = wishlist.items;
-  const covers = items.slice(0, 4).map((i) =>
-    getListingImages({ type: 'APARTMENT' })[0]
-  );
-  const placeholder = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&q=60';
+// Wishlists are stored locally in the global store (no backend endpoint).
+// The `saved` array in the store holds the IDs; `savedListings` cross-references
+// those IDs with the fetched listings.
+
+function SavedCard({ listing, onRemove }: { listing: ApiListingItem; onRemove: () => void }) {
+  const images = getListingImages(listing);
+  const loc = parseLocation(listing.location);
 
   return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.photoGrid}>
-        {[0, 1, 2, 3].map((i) => (
-          <Image
-            key={i}
-            source={{ uri: covers[i] ?? placeholder }}
-            style={styles.photoGridItem}
-            contentFit="cover"
-          />
-        ))}
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push(`/listing/${listing.id}`)}>
+      <View style={styles.imgWrap}>
+        <Image source={{ uri: images[0] }} style={styles.img} contentFit="cover" />
+        <Pressable style={styles.removeBtn} onPress={(e) => { e.stopPropagation?.(); onRemove(); }}>
+          <Ionicons name="heart" size={20} color={Colors.brand} />
+        </Pressable>
       </View>
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardName}>{wishlist.name}</Text>
-        <Text style={styles.cardCount}>
-          {items.length} {items.length === 1 ? 'home' : 'homes'}
+      <View style={styles.info}>
+        <Text style={styles.location} numberOfLines={1}>
+          {loc.city}{loc.region ? `, ${loc.region}` : ''}
         </Text>
+        <Text style={styles.type} numberOfLines={1}>{listing.type.charAt(0) + listing.type.slice(1).toLowerCase()}</Text>
+        <Text style={styles.price}>
+          <Text style={styles.priceBold}>${listing.pricePerNight}</Text> night
+        </Text>
+        {listing.rating != null && (
+          <View style={styles.ratingRow}>
+            <Ionicons name="star" size={11} color={Colors.text} />
+            <Text style={styles.ratingText}>{Number(listing.rating).toFixed(1)}</Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
 }
 
-// ─── Auth gate ────────────────────────────────────────────────────────────────
-function AuthGate() {
-  return (
-    <View style={styles.authGate}>
-      <Ionicons name="heart-outline" size={48} color={Colors.border} />
-      <Text style={styles.authTitle}>Log in to see wishlists</Text>
-      <Text style={styles.authSub}>
-        Save your favourite listings and access them anytime by logging in.
-      </Text>
-      <Pressable style={styles.authBtn} onPress={() => router.push('/login')}>
-        <Text style={styles.authBtnText}>Log in</Text>
-      </Pressable>
-      <Pressable onPress={() => router.push('/register')}>
-        <Text style={styles.authLink}>Create account</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-// ─── Wishlist Screen ──────────────────────────────────────────────────────────
 export default function WishlistScreen() {
-  const { token } = useAuth();
-  const [wishlists, setWishlists] = useState<ApiWishlist[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-
-  const loadWishlists = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.getWishlists(token);
-      setWishlists(data);
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load wishlists');
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    loadWishlists();
-  }, [loadWishlists]);
-
-  async function handleCreate() {
-    if (!token || creating) return;
-    Alert.prompt(
-      'New wishlist',
-      'Enter a name for your wishlist',
-      async (name) => {
-        if (!name?.trim()) return;
-        setCreating(true);
-        try {
-          const wl = await api.createWishlist(token, name.trim());
-          setWishlists((prev) => [...prev, wl]);
-        } catch (e: any) {
-          Alert.alert('Error', e.message ?? 'Failed to create wishlist');
-        } finally {
-          setCreating(false);
-        }
-      },
-      'plain-text',
-      'My Wishlist',
-    );
-  }
+  const { savedListings, toggle, count } = useFavorites();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -121,53 +57,35 @@ export default function WishlistScreen() {
         <Ionicons name="person-circle-outline" size={28} color={Colors.text} />
       </View>
 
-      {!token ? (
-        <AuthGate />
-      ) : loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-        </View>
-      ) : error ? (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={loadWishlists}>
-            <Text style={styles.retryBtnText}>Retry</Text>
+      {count === 0 ? (
+        <View style={styles.empty}>
+          <Ionicons name="heart-outline" size={56} color={Colors.border} />
+          <Text style={styles.emptyTitle}>Nothing saved yet</Text>
+          <Text style={styles.emptySub}>
+            Tap the heart on any listing to save it here.
+          </Text>
+          <Pressable style={styles.browseBtn} onPress={() => router.push('/(tabs)/home')}>
+            <Text style={styles.browseBtnText}>Browse listings</Text>
           </Pressable>
         </View>
       ) : (
-        <FlatList
-          data={wishlists}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <WishlistCard
-              wishlist={item}
-              onPress={() => {}}
-            />
-          )}
-          numColumns={2}
-          columnWrapperStyle={styles.columnWrap}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons name="heart-outline" size={40} color={Colors.border} />
-              <Text style={styles.emptyTitle}>No wishlists yet</Text>
-              <Text style={styles.emptyText}>Save listings you love and create wishlists to organise them.</Text>
-            </View>
-          }
-          ListFooterComponent={
-            <Pressable style={styles.newBtn} onPress={handleCreate} disabled={creating}>
-              <View style={styles.newBtnIconWrap}>
-                {creating ? (
-                  <ActivityIndicator color={Colors.text} />
-                ) : (
-                  <Ionicons name="add" size={24} color={Colors.text} />
-                )}
-              </View>
-              <Text style={styles.newBtnText}>Create new wishlist</Text>
-            </Pressable>
-          }
-        />
+        <>
+          <Text style={styles.countText}>{count} saved {count === 1 ? 'place' : 'places'}</Text>
+          <FlatList
+            data={savedListings}
+            keyExtractor={(l) => l.id}
+            numColumns={2}
+            columnWrapperStyle={styles.columnWrap}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <SavedCard
+                listing={item}
+                onRemove={() => toggle(item.id, item.title)}
+              />
+            )}
+          />
+        </>
       )}
     </SafeAreaView>
   );
@@ -175,64 +93,25 @@ export default function WishlistScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
-
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   title: { fontSize: FontSize.xxl, fontWeight: '700', color: Colors.text },
-
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
-  errorText: { fontSize: FontSize.base, color: Colors.textSecondary, textAlign: 'center' },
-  retryBtn: {
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
-    borderRadius: Radius.full, borderWidth: 1.5, borderColor: Colors.text,
-  },
-  retryBtnText: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
-
-  // Auth gate
-  authGate: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: Spacing.xl, gap: Spacing.md,
-  },
-  authTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text, textAlign: 'center' },
-  authSub: { fontSize: FontSize.base, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  authBtn: {
-    backgroundColor: Colors.brand, borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.xl, paddingVertical: 14, marginTop: Spacing.sm,
-  },
-  authBtnText: { color: Colors.white, fontSize: FontSize.base, fontWeight: '700' },
-  authLink: { fontSize: FontSize.base, color: Colors.text, fontWeight: '600', textDecorationLine: 'underline' },
-
-  // List
+  countText: { fontSize: FontSize.sm, color: Colors.textSecondary, paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
   listContent: { padding: Spacing.md, gap: Spacing.md },
   columnWrap: { gap: Spacing.md },
-
-  card: {
-    flex: 1, borderRadius: Radius.xl, overflow: 'hidden',
-    backgroundColor: Colors.backgroundSecondary, ...Shadow.sm,
-  },
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', aspectRatio: 1 },
-  photoGridItem: { width: '50%', height: '50%' },
-  cardInfo: { padding: Spacing.sm },
-  cardName: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
-  cardCount: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-
-  // Empty
-  emptyBox: {
-    alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-  },
-  emptyTitle: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-  emptyText: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
-
-  // New button
-  newBtn: { alignItems: 'center', paddingVertical: Spacing.lg, gap: Spacing.sm },
-  newBtnIconWrap: {
-    width: 56, height: 56, borderRadius: 28,
-    borderWidth: 1.5, borderColor: Colors.text,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  newBtnText: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
+  card: { flex: 1, borderRadius: Radius.xl, overflow: 'hidden', backgroundColor: Colors.white, ...Shadow.sm },
+  imgWrap: { position: 'relative', aspectRatio: 1 },
+  img: { width: '100%', height: '100%' },
+  removeBtn: { position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
+  info: { padding: Spacing.sm, gap: 2 },
+  location: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
+  type: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  price: { fontSize: FontSize.sm, color: Colors.text, marginTop: 2 },
+  priceBold: { fontWeight: '700' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  ratingText: { fontSize: FontSize.xs, color: Colors.text, fontWeight: '500' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, paddingHorizontal: Spacing.xl },
+  emptyTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
+  emptySub: { fontSize: FontSize.base, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  browseBtn: { backgroundColor: Colors.brand, borderRadius: Radius.lg, paddingHorizontal: Spacing.xl, paddingVertical: 14, marginTop: Spacing.sm },
+  browseBtnText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.base },
 });

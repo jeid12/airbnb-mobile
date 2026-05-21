@@ -1,6 +1,6 @@
-const BASE_URL = 'https://airbnb-listing-api.onrender.com/api/v1';
+export const BASE_URL = 'https://airbnb-listing-api.onrender.com/api/v1';
 
-// ─── Backend types ────────────────────────────────────────────────────────────
+// ─── Shared types ─────────────────────────────────────────────────────────────
 
 export interface ApiMeta {
   page: number;
@@ -14,51 +14,63 @@ export interface ApiPaginated<T> {
   meta: ApiMeta;
 }
 
-export type ListingType = 'APARTMENT' | 'VILLA' | 'CABIN' | 'HOUSE';
+export type ListingType = 'APARTMENT' | 'HOUSE' | 'VILLA' | 'CABIN';
+export type UserRole   = 'HOST' | 'GUEST' | 'ADMIN';
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
 
-export interface ApiListingItem {
-  id: string;
-  title: string;
-  location: string; // "Downtown, New York"
-  pricePerNight: number;
-  type: ListingType;
-  guests: number;
-  amenities: string[];
-  rating: number;
-  createdAt: string;
-  host: { name: string; avatar: string | null; isSuperhost?: boolean };
-  _count: { bookings: number };
-}
+// ─── Domain types (match API schema exactly) ──────────────────────────────────
 
-export interface ApiListingDetail extends Omit<ApiListingItem, '_count'> {
-  description: string;
-  bedrooms: number;
-  beds: number;
-  bathrooms: number;
-  category: string;
-  hostId: string;
-  updatedAt: string;
-  host: ApiHost;
-  bookings: ApiBooking[];
-  photos: Array<{ id: string; url: string }>;
-}
-
-export interface ApiHost {
+export interface ApiUser {
   id: string;
   name: string;
   email: string;
   username: string;
   phone: string;
-  role: string;
+  role: UserRole;
   avatar: string | null;
   bio: string | null;
   isSuperhost: boolean;
   createdAt: string;
+  updatedAt: string;
+  // Populated by GET /auth/me / GET /users/:id
+  listings?: ApiListingItem[];
+  bookings?: ApiBooking[];
 }
+
+export interface ApiListingItem {
+  id: string;
+  title: string;
+  description: string;
+  location: string;          // e.g. "Downtown, New York"
+  pricePerNight: number;
+  guests: number;
+  beds?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  type: ListingType;
+  category?: string;
+  amenities: string[];
+  rating: number | null;
+  hostId: string;
+  createdAt: string;
+  updatedAt?: string;
+  host: {
+    id?: string;
+    name: string;
+    avatar: string | null;
+    isSuperhost?: boolean;
+  };
+  photos?: Array<{ id: string; url: string }>;
+  bookings?: ApiBooking[];
+  _count?: { bookings: number };
+}
+
+// Alias — detail endpoint returns same shape with more fields populated
+export type ApiListingDetail = ApiListingItem;
 
 export interface ApiReview {
   id: string;
-  rating: number;
+  rating: number;           // 1-5
   comment: string;
   userId: string;
   listingId: string;
@@ -68,145 +80,266 @@ export interface ApiReview {
 
 export interface ApiBooking {
   id: string;
-  checkIn: string;
+  checkIn: string;          // ISO datetime
   checkOut: string;
-  guests: number;
   totalPrice: number;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
-  createdAt: string;
+  status: BookingStatus;
   guestId: string;
   listingId: string;
-  guest: { name: string; avatar?: string | null };
-  listing: { title: string; location: string };
-}
-
-export interface ApiUser {
-  id: string;
-  name: string;
-  email: string;
-  username: string;
-  phone: string;
-  role: string;
-  avatar: string | null;
-  bio: string | null;
-  isSuperhost: boolean;
+  guests?: number;
   createdAt: string;
-  updatedAt: string;
-  bookings?: ApiBooking[];
+  guest?: { name: string; avatar?: string | null };
+  listing?: { title: string; location: string; id?: string };
 }
 
-export interface ApiWishlistItem {
-  id: string;
-  wishlistId: string;
-  listingId: string;
-  addedAt: string;
-  listing: { id: string; title: string; location: string; pricePerNight: number };
+export interface ApiStats {
+  totalListings: number;
+  averagePrice: number;
+  byLocation: Array<{ location: string; count: number }>;
+  byType: Array<{ type: string; count: number }>;
 }
 
-export interface ApiWishlist {
-  id: string;
-  name: string;
-  userId: string;
-  createdAt: string;
-  items: ApiWishlistItem[];
+export interface ApiUserStats {
+  totalUsers: number;
+  byRole: Array<{ role: string; count: number }>;
 }
 
-// ─── Request helper ───────────────────────────────────────────────────────────
+// ─── Request helpers ──────────────────────────────────────────────────────────
 
-async function request<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  token?: string | null,
+): Promise<T> {
+  const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  // Don't set Content-Type for FormData (browser sets it with boundary)
+  const isFormData = options.body instanceof FormData;
+  if (!isFormData) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers: { ...headers, ...(options.headers as Record<string, string>) },
+    headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
   });
 
   const body = await res.json().catch(() => ({}));
-
   if (!res.ok) {
-    const msg = body?.message ?? body?.error ?? `Request failed (${res.status})`;
+    const msg = (body as { error?: string; message?: string }).error
+      ?? (body as { error?: string; message?: string }).message
+      ?? `Request failed (${res.status})`;
     throw new Error(String(msg));
   }
-
   return body as T;
 }
 
 function qs(params: Record<string, unknown>): string {
   const pairs = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
-  if (!pairs.length) return '';
-  return '?' + pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
+  return pairs.length ? '?' + pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&') : '';
 }
 
 // ─── API surface ──────────────────────────────────────────────────────────────
 
 export const api = {
-  // Listings
-  getListings(params: { page?: number; limit?: number; search?: string; type?: string } = {}, token?: string | null) {
-    return request<ApiPaginated<ApiListingItem>>(`/listings${qs(params)}`, {}, token);
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+
+  register(data: {
+    name: string; email: string; username: string; phone: string;
+    password: string; role?: 'HOST' | 'GUEST';
+  }): Promise<ApiUser> {
+    return request('/auth/register', { method: 'POST', body: JSON.stringify(data) });
   },
 
-  getListing(id: string, token?: string | null) {
-    return request<ApiListingDetail>(`/listings/${id}`, {}, token);
+  login(email: string, password: string): Promise<{ token: string; user: ApiUser }> {
+    return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
   },
 
-  getListingReviews(id: string, params: { page?: number; limit?: number } = {}) {
-    return request<ApiPaginated<ApiReview>>(`/listings/${id}/reviews${qs(params)}`);
+  getMe(token: string): Promise<ApiUser> {
+    return request('/auth/me', {}, token);
   },
 
-  // Auth
-  login(email: string, password: string) {
-    return request<{ token: string; user: ApiUser }>('/auth/login', {
+  changePassword(token: string, currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    return request('/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }, token);
+  },
+
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+  },
+
+  resetPassword(token: string, password: string): Promise<{ message: string }> {
+    return request(`/auth/reset-password/${token}`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
     });
   },
 
-  register(data: { name: string; email: string; username: string; phone: string; password: string }) {
-    return request<ApiUser>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
+  // ── Listings ─────────────────────────────────────────────────────────────────
+
+  getListings(params: {
+    location?: string; type?: string; maxPrice?: number;
+    page?: number; limit?: number; sortBy?: 'pricePerNight' | 'createdAt';
+    order?: 'asc' | 'desc';
+  } = {}): Promise<ApiPaginated<ApiListingItem>> {
+    return request(`/listings${qs(params)}`);
+  },
+
+  searchListings(params: {
+    location?: string; type?: string; minPrice?: number; maxPrice?: number;
+    guests?: number; page?: number; limit?: number;
+  } = {}): Promise<ApiPaginated<ApiListingItem>> {
+    return request(`/listings/search${qs(params)}`);
+  },
+
+  getListingsStats(): Promise<ApiStats> {
+    return request('/listings/stats');
+  },
+
+  getListing(id: string): Promise<ApiListingDetail> {
+    return request(`/listings/${id}`);
+  },
+
+  createListing(token: string, data: {
+    title: string; description: string; location: string;
+    pricePerNight: number; guests: number; type: ListingType; amenities: string[];
+    rating?: number;
+  }): Promise<ApiListingItem> {
+    return request('/listings', { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+
+  updateListing(token: string, id: string, data: Partial<{
+    title: string; description: string; location: string;
+    pricePerNight: number; guests: number; type: ListingType; amenities: string[];
+  }>): Promise<ApiListingItem> {
+    return request(`/listings/${id}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+
+  deleteListing(token: string, id: string): Promise<ApiListingItem> {
+    return request(`/listings/${id}`, { method: 'DELETE' }, token);
+  },
+
+  uploadListingPhotos(token: string, id: string, files: FormData): Promise<ApiListingItem> {
+    return request(`/listings/${id}/photos`, { method: 'POST', body: files }, token);
+  },
+
+  deleteListingPhoto(token: string, id: string, photoId: string): Promise<{ message: string }> {
+    return request(`/listings/${id}/photos/${photoId}`, { method: 'DELETE' }, token);
+  },
+
+  // ── Reviews ──────────────────────────────────────────────────────────────────
+
+  getListingReviews(id: string, params: { page?: number; limit?: number } = {}): Promise<ApiPaginated<ApiReview>> {
+    return request(`/listings/${id}/reviews${qs(params)}`);
+  },
+
+  addReview(token: string, listingId: string, data: { rating: number; comment: string }): Promise<ApiReview> {
+    return request(`/listings/${listingId}/reviews`, {
+      method: 'POST', body: JSON.stringify(data),
+    }, token);
+  },
+
+  deleteReview(token: string, reviewId: string): Promise<{ message: string }> {
+    return request(`/reviews/${reviewId}`, { method: 'DELETE' }, token);
+  },
+
+  // ── Bookings ─────────────────────────────────────────────────────────────────
+
+  getAllBookings(): Promise<ApiPaginated<ApiBooking>> {
+    return request('/bookings');
+  },
+
+  createBooking(token: string, data: {
+    listingId: string; checkIn: string; checkOut: string; guests?: number;
+  }): Promise<ApiBooking> {
+    return request('/bookings', { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+
+  getBookingById(id: string): Promise<ApiBooking> {
+    return request(`/bookings/${id}`);
+  },
+
+  cancelBooking(token: string, id: string): Promise<ApiBooking> {
+    return request(`/bookings/${id}`, { method: 'DELETE' }, token);
+  },
+
+  updateBookingStatus(id: string, status: BookingStatus): Promise<ApiBooking> {
+    return request(`/bookings/${id}/status`, {
+      method: 'PATCH', body: JSON.stringify({ status }),
     });
   },
 
-  getMe(token: string) {
-    return request<ApiUser>('/auth/me', {}, token);
+  // ── Users ─────────────────────────────────────────────────────────────────────
+
+  getUsers(): Promise<ApiUser[]> {
+    return request('/users');
   },
 
-  // Bookings
-  getBookings(token: string) {
-    return request<ApiPaginated<ApiBooking>>('/bookings', {}, token);
+  getUserStats(): Promise<ApiUserStats> {
+    return request('/users/stats');
   },
 
-  createBooking(token: string, data: { listingId: string; checkIn: string; checkOut: string; guests: number }) {
-    return request<ApiBooking>('/bookings', { method: 'POST', body: JSON.stringify(data) }, token);
+  getUserById(id: string): Promise<ApiUser> {
+    return request(`/users/${id}`);
   },
 
-  // Wishlists
-  getWishlists(token: string) {
-    return request<ApiWishlist[]>('/wishlists', {}, token);
+  updateUser(id: string, data: Partial<ApiUser>): Promise<ApiUser> {
+    return request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
 
-  createWishlist(token: string, name = 'My Wishlist') {
-    return request<ApiWishlist>('/wishlists', { method: 'POST', body: JSON.stringify({ name }) }, token);
+  deleteUser(id: string): Promise<ApiUser> {
+    return request(`/users/${id}`, { method: 'DELETE' });
   },
 
-  addToWishlist(token: string, wishlistId: string, listingId: string) {
-    return request<ApiWishlistItem>(
-      `/wishlists/${wishlistId}/items`,
-      { method: 'POST', body: JSON.stringify({ listingId }) },
-      token,
-    );
+  // GET /users/:id/listings — host's own listings
+  getUserListings(userId: string): Promise<ApiListingItem[]> {
+    return request(`/users/${userId}/listings`);
   },
 
-  removeFromWishlist(token: string, wishlistId: string, itemId: string) {
-    return request<void>(`/wishlists/${wishlistId}/items/${itemId}`, { method: 'DELETE' }, token);
+  // GET /users/:id/bookings — guest's own bookings
+  getUserBookings(token: string, userId: string): Promise<ApiBooking[]> {
+    return request(`/users/${userId}/bookings`, {}, token);
+  },
+
+  uploadAvatar(token: string, userId: string, form: FormData): Promise<ApiUser> {
+    return request(`/users/${userId}/avatar`, { method: 'POST', body: form }, token);
+  },
+
+  removeAvatar(token: string, userId: string): Promise<{ message: string }> {
+    return request(`/users/${userId}/avatar`, { method: 'DELETE' }, token);
+  },
+
+  // ── AI ───────────────────────────────────────────────────────────────────────
+
+  aiSearch(query: string, page = 1, limit = 10): Promise<{ data: ApiListingItem[]; filters: object; meta: ApiMeta }> {
+    return request(`/ai/search${qs({ page, limit })}`, {
+      method: 'POST', body: JSON.stringify({ query }),
+    });
+  },
+
+  aiChat(sessionId: string, message: string, listingId?: string): Promise<{ reply: string; sessionId: string }> {
+    return request('/ai/chat', {
+      method: 'POST', body: JSON.stringify({ sessionId, message, listingId }),
+    });
+  },
+
+  aiRecommend(token: string): Promise<{ data: ApiListingItem[] }> {
+    return request('/ai/recommend', { method: 'POST' }, token);
+  },
+
+  aiReviewSummary(listingId: string): Promise<{ summary: string }> {
+    return request(`/ai/listings/${listingId}/review-summary`);
+  },
+
+  aiGroupedListings(groupBy: 'location' | 'host' = 'location'): Promise<object> {
+    return request(`/ai/listings/grouped${qs({ groupBy })}`);
   },
 };
 
-// ─── Utility helpers ──────────────────────────────────────────────────────────
+// ─── Image helpers ────────────────────────────────────────────────────────────
 
-// API has no listing photos, use Unsplash fallbacks by type.
 const FALLBACK_IMAGES: Record<string, string[]> = {
   APARTMENT: [
     'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80',
@@ -235,13 +368,13 @@ export function getListingImages(listing: { type: string; photos?: Array<{ url: 
   return FALLBACK_IMAGES[listing.type] ?? ['https://images.unsplash.com/photo-1484101403633-562f891dc89a?w=800&q=80'];
 }
 
-/** Parse "Downtown, New York" → { city: "Downtown", region: "New York" } */
+/** Parse "Downtown, New York" → { city, region } */
 export function parseLocation(location: string): { city: string; region: string } {
   const parts = location.split(',').map((s) => s.trim());
   return { city: parts[0] ?? location, region: parts.slice(1).join(', ') };
 }
 
-/** Map a local UI category id to the API `type` param (undefined = no filter). */
+/** Map a local UI category id → API `type` param (undefined = no filter) */
 export function categoryToApiType(categoryId: string): string | undefined {
   const map: Record<string, string> = {
     cabins: 'CABIN',

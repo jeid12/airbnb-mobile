@@ -240,7 +240,18 @@ export default function BookingScreen() {
 
   function confirm() {
     if (!s1 || !id) return;
-    mutate({ listingId: id, checkIn: s1.checkIn, checkOut: s1.checkOut, guests: s1.guests });
+    // API expects ISO datetime strings (e.g. "2027-07-01T12:00:00Z")
+    const toISO = (d: string) => {
+      const date = new Date(d);
+      date.setHours(12, 0, 0, 0);
+      return date.toISOString();
+    };
+    mutate({
+      listingId: id,
+      checkIn: toISO(s1.checkIn),
+      checkOut: toISO(s1.checkOut),
+      guests: s1.guests,
+    });
   }
 
   return (

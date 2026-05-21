@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -13,7 +12,9 @@ import {
 } from 'react-native';
 
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/constants/theme';
-import { api, type ApiReview } from '@/services/api';
+import { useListingReviews } from '@/features/listings/hooks/useReviews';
+import type { ApiReview } from '@/services/api';
+import Spinner from '@/shared/components/Spinner';
 
 function ReviewCard({ review }: { review: ApiReview }) {
   return (
@@ -41,26 +42,29 @@ function ReviewCard({ review }: { review: ApiReview }) {
   );
 }
 
+function RatingBar({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.ratingRow}>
+      <Text style={styles.ratingLabel}>{label}</Text>
+      <View style={styles.ratingTrack}>
+        <View style={[styles.ratingFill, { width: `${(value / 5) * 100}%` }]} />
+      </View>
+      <Text style={styles.ratingValue}>{value.toFixed(1)}</Text>
+    </View>
+  );
+}
+
 export default function ReviewsModal() {
   const { listingId } = useLocalSearchParams<{ listingId: string }>();
-  const [reviews, setReviews] = useState<ApiReview[]>([]);
-  const [rating, setRating] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    if (!listingId) return;
-    Promise.all([
-      api.getListingReviews(listingId, { limit: 50 }),
-      api.getListing(listingId),
-    ])
-      .then(([revRes, detail]) => {
-        setReviews(revRes.data);
-        setRating(detail.rating);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [listingId]);
+  const { data, isLoading } = useListingReviews(listingId ?? '', { limit: 50 });
+
+  const reviews = data?.data ?? [];
+  const total = data?.meta.total ?? reviews.length;
+  const avgRating = reviews.length > 0
+    ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+    : 0;
 
   const filtered = search.trim()
     ? reviews.filter(
@@ -79,15 +83,13 @@ export default function ReviewsModal() {
           <Ionicons name="close" size={22} color={Colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>
-          ★ {rating.toFixed(1)} · {reviews.length} reviews
+          ★ {avgRating.toFixed(1)} · {total} review{total !== 1 ? 's' : ''}
         </Text>
         <View style={{ width: 36 }} />
       </View>
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={Colors.brand} />
-        </View>
+      {isLoading ? (
+        <Spinner />
       ) : (
         <FlatList
           data={filtered}
@@ -97,6 +99,8 @@ export default function ReviewsModal() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.listHeader}>
+              <RatingBar label="Overall" value={avgRating} />
+
               <View style={styles.searchBox}>
                 <Ionicons name="search" size={16} color={Colors.textSecondary} />
                 <TextInput
@@ -114,7 +118,7 @@ export default function ReviewsModal() {
               </View>
               {search.length > 0 && (
                 <Text style={styles.resultCount}>
-                  {filtered.length} review{filtered.length !== 1 ? 's' : ''} mentioned "{search}"
+                  {filtered.length} review{filtered.length !== 1 ? 's' : ''} mentioning "{search}"
                 </Text>
               )}
             </View>
@@ -122,11 +126,8 @@ export default function ReviewsModal() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>
-                {search ? 'No search results' : 'No reviews yet'}
+                {search ? 'No matching reviews' : 'No reviews yet'}
               </Text>
-              {search ? (
-                <Text style={styles.emptyText}>Reviews mentioning "{search}" will appear here.</Text>
-              ) : null}
             </View>
           }
           contentContainerStyle={styles.listContent}
@@ -138,30 +139,20 @@ export default function ReviewsModal() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: Colors.border, alignSelf: 'center', marginTop: 12,
-  },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-  },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   headerTitle: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
   listHeader: { padding: Spacing.md, gap: Spacing.sm },
-  searchBox: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: Radius.full, borderWidth: 1.5, borderColor: Colors.border,
-    paddingHorizontal: Spacing.md, paddingVertical: 10, gap: Spacing.sm, ...Shadow.sm,
-  },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  ratingLabel: { width: 100, fontSize: FontSize.sm, color: Colors.text },
+  ratingTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: Colors.borderLight, overflow: 'hidden' },
+  ratingFill: { height: '100%', backgroundColor: Colors.text, borderRadius: 2 },
+  ratingValue: { width: 28, fontSize: FontSize.sm, color: Colors.text, textAlign: 'right' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: Radius.full, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: Spacing.md, paddingVertical: 10, gap: Spacing.sm, ...Shadow.sm },
   searchInput: { flex: 1, fontSize: FontSize.base, color: Colors.text },
   resultCount: { fontSize: FontSize.sm, color: Colors.textSecondary },
-
   listContent: { paddingBottom: 48 },
   separator: { height: 1, backgroundColor: Colors.borderLight, marginHorizontal: Spacing.md },
-
   reviewCard: { padding: Spacing.md },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.sm },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.backgroundSecondary },
@@ -169,8 +160,6 @@ const styles = StyleSheet.create({
   reviewDate: { fontSize: FontSize.sm, color: Colors.textSecondary },
   stars: { flexDirection: 'row', gap: 2, marginBottom: Spacing.sm },
   reviewBody: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
-
-  empty: { padding: Spacing.xl, gap: Spacing.sm },
+  empty: { padding: Spacing.xl, alignItems: 'center' },
   emptyTitle: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
-  emptyText: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
 });

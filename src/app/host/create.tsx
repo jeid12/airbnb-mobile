@@ -5,29 +5,32 @@ import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
-import { useQueryClient } from '@tanstack/react-query';
 
 import { Colors, FontSize, Radius, Spacing } from '@/constants/theme';
+import { useCreateListing } from '@/features/host/hooks/useHostListings';
 import { listingSchema, type ListingFormData } from '@/features/host/schemas/listing';
 
 const TYPES = ['APARTMENT', 'VILLA', 'CABIN', 'HOUSE'] as const;
 
 export default function CreateListingScreen() {
-  const qc = useQueryClient();
-  const { control, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<ListingFormData>({
+  const { create, isPending } = useCreateListing();
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<ListingFormData>({
     resolver: zodResolver(listingSchema),
     defaultValues: { title: '', description: '', location: '', pricePerNight: 50, type: 'APARTMENT', guests: 2 },
   });
 
   const selectedType = watch('type');
 
-  async function onSubmit(data: ListingFormData) {
-    // In a real app, POST to API. Here we optimistically add to cache.
-    await new Promise((r) => setTimeout(r, 600));
-    qc.invalidateQueries({ queryKey: ['listings'] });
-    Toast.show({ type: 'success', text1: 'Listing created!', text2: data.title });
-    router.back();
+  function onSubmit(data: ListingFormData) {
+    create({
+      title: data.title,
+      description: data.description,
+      location: data.location,
+      pricePerNight: data.pricePerNight,
+      guests: data.guests,
+      type: data.type,
+      amenities: [],
+    });
   }
 
   return (
@@ -112,9 +115,9 @@ export default function CreateListingScreen() {
             </View>
           </View>
 
-          <Pressable style={[styles.submitBtn, isSubmitting && { opacity: 0.7 }]}
-            onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
-            <Text style={styles.submitBtnText}>{isSubmitting ? 'Saving…' : 'Save listing'}</Text>
+          <Pressable style={[styles.submitBtn, isPending && { opacity: 0.7 }]}
+            onPress={handleSubmit(onSubmit)} disabled={isPending}>
+            <Text style={styles.submitBtnText}>{isPending ? 'Saving…' : 'Save listing'}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
