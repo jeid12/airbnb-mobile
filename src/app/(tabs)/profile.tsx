@@ -11,7 +11,10 @@ import { useAuth } from '@/context/auth';
 interface SettingRow {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
+  sub?: string;
+  route?: string;
   onPress?: () => void;
+  danger?: boolean;
 }
 
 function SettingsSection({ title, rows }: { title: string; rows: SettingRow[] }) {
@@ -23,11 +26,16 @@ function SettingsSection({ title, rows }: { title: string; rows: SettingRow[] })
           <View key={row.label}>
             <Pressable
               style={styles.settingRow}
-              onPress={row.onPress}
+              onPress={row.onPress ?? (() => row.route && router.push(row.route as any))}
               android_ripple={{ color: Colors.borderLight }}>
-              <Ionicons name={row.icon} size={22} color={Colors.text} />
-              <Text style={styles.settingLabel}>{row.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+              <View style={[styles.iconBox, row.danger && styles.iconBoxDanger]}>
+                <Ionicons name={row.icon} size={20} color={row.danger ? '#ef4444' : Colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingLabel, row.danger && { color: '#ef4444' }]}>{row.label}</Text>
+                {row.sub && <Text style={styles.settingSub}>{row.sub}</Text>}
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
             </Pressable>
             {i < rows.length - 1 && <View style={styles.rowDivider} />}
           </View>
@@ -37,14 +45,13 @@ function SettingsSection({ title, rows }: { title: string; rows: SettingRow[] })
   );
 }
 
-// ─── Not-logged-in state ──────────────────────────────────────────────────────
+// ─── Not logged in ────────────────────────────────────────────────────────────
 function GuestProfile() {
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
       </View>
-
       <View style={styles.guestCard}>
         <Text style={styles.guestHeading}>Log in to your account</Text>
         <Text style={styles.guestSub}>
@@ -59,16 +66,13 @@ function GuestProfile() {
           </Text>
         </Pressable>
       </View>
-
       <SettingsSection
         title="Explore"
         rows={[
-          { icon: 'help-circle-outline', label: 'How Airbnb works' },
+          { icon: 'help-circle-outline', label: 'How Airbnb works', sub: 'Learn about hosting and staying' },
           { icon: 'shield-checkmark-outline', label: 'Safety information' },
-          { icon: 'information-circle-outline', label: 'Support' },
         ]}
       />
-
       <Text style={styles.version}>Airbnb Mobile v1.0</Text>
     </ScrollView>
   );
@@ -78,55 +82,42 @@ function GuestProfile() {
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
 
-  if (!user) return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <GuestProfile />
-    </SafeAreaView>
-  );
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <GuestProfile />
+      </SafeAreaView>
+    );
+  }
 
-  const role = (user.role ?? 'GUEST') as string;
-  const isHost = role === 'HOST';
-  const isAdmin = role === 'ADMIN';
+  const joinYear = new Date(user.createdAt).getFullYear();
+  const isHost  = user.role === 'HOST';
+  const isAdmin = user.role === 'ADMIN';
 
   const accountSettings: SettingRow[] = [
-    { icon: 'person-outline', label: 'Personal information' },
-    { icon: 'card-outline', label: 'Payments and payouts' },
-    { icon: 'notifications-outline', label: 'Notifications' },
-    { icon: 'shield-checkmark-outline', label: 'Privacy and sharing' },
-    { icon: 'briefcase-outline', label: 'Travel for work' },
+    { icon: 'person-outline',           label: 'Personal information',  sub: 'Name, username, phone, bio',       route: '/settings/personal' },
+    { icon: 'card-outline',             label: 'Payments and payouts',  sub: 'Add cards, view transactions',      route: '/settings/payments' },
+    { icon: 'notifications-outline',    label: 'Notifications',         sub: 'Bookings, messages, promotions',    route: '/settings/notifications' },
+    { icon: 'shield-checkmark-outline', label: 'Privacy and sharing',   sub: 'Data usage, account deletion',      route: '/settings/privacy' },
+    { icon: 'briefcase-outline',        label: 'Travel for work',       sub: 'Business mode, VAT receipts',       route: '/settings/travel' },
+    { icon: 'lock-closed-outline',      label: 'Change password',       sub: 'Update your account password',      route: '/settings/password' },
   ];
 
-  const push = (path: string) => () => router.push(path as any);
-
-  const roleRows: SettingRow[] = isAdmin
-    ? [
-        { icon: 'shield-outline', label: 'Admin Dashboard', onPress: push('/admin') },
-        { icon: 'people-outline', label: 'Manage Users', onPress: push('/admin/users') },
-        { icon: 'checkmark-circle-outline', label: 'Moderation Queue', onPress: push('/admin/moderation') },
-      ]
-    : isHost
-    ? [
-        { icon: 'home-outline', label: 'Host Dashboard', onPress: push('/host') },
-        { icon: 'list-outline', label: 'My Listings', onPress: push('/host/listings') },
-        { icon: 'add-circle-outline', label: 'Add New Listing', onPress: push('/host/create') },
-        { icon: 'calendar-outline', label: 'Booking Requests', onPress: push('/host/bookings') },
-      ]
-    : [];
+  const hostRows: SettingRow[] = [
+    ...(isHost || isAdmin
+      ? [{ icon: 'home-outline' as const, label: 'Host dashboard', sub: 'Manage listings and bookings', route: '/host' }]
+      : []),
+    ...(isAdmin
+      ? [{ icon: 'settings-outline' as const, label: 'Admin panel', sub: 'Platform management', route: '/admin' }]
+      : []),
+  ];
 
   function handleLogout() {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () => {
-          logout();
-        },
-      },
+      { text: 'Log out', style: 'destructive', onPress: logout },
     ]);
   }
-
-  const joinYear = new Date(user.createdAt).getFullYear();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -135,79 +126,82 @@ export default function ProfileScreen() {
           <Text style={styles.title}>Profile</Text>
         </View>
 
-        {/* User card */}
-        <View style={styles.userCard}>
-          <View style={styles.userCardLeft}>
-            <View style={styles.avatarWrap}>
-              {user.avatar ? (
-                <Image source={{ uri: user.avatar }} style={styles.userAvatar} contentFit="cover" />
-              ) : (
-                <View style={[styles.userAvatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarInitial}>
-                    {user.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              {user.isSuperhost && (
-                <View style={styles.superhostDot}>
-                  <Ionicons name="medal" size={12} color={Colors.brand} />
-                </View>
-              )}
-            </View>
-            <View>
-              <Text style={styles.userName}>{user.name}</Text>
-              <Text style={styles.userSub}>Member since {joinYear}</Text>
-              {user.isSuperhost && <Text style={styles.superhostLabel}>Superhost</Text>}
-            </View>
+        {/* User card — tapping goes to Personal Info */}
+        <Pressable style={styles.userCard} onPress={() => router.push('/settings/personal')}>
+          <View style={styles.avatarWrap}>
+            {user.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.userAvatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.userAvatar, styles.avatarFallback]}>
+                <Text style={styles.avatarInitial}>{user.name.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            {user.isSuperhost && (
+              <View style={styles.superhostDot}>
+                <Ionicons name="medal" size={10} color={Colors.brand} />
+              </View>
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.userName}>{user.name}</Text>
+            <Text style={styles.userSub}>
+              {user.role.charAt(0) + user.role.slice(1).toLowerCase()} · Member since {joinYear}
+            </Text>
+            {user.isSuperhost && (
+              <View style={styles.superhostBadge}>
+                <Ionicons name="medal-outline" size={12} color={Colors.brand} />
+                <Text style={styles.superhostText}>Superhost</Text>
+              </View>
+            )}
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.text} />
-        </View>
+        </Pressable>
 
-        {/* User info row */}
-        <View style={styles.userInfoRow}>
-          <View style={styles.userInfoItem}>
-            <Ionicons name="mail-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.userInfoText} numberOfLines={1}>{user.email}</Text>
+        {/* Quick info */}
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <Ionicons name="mail-outline" size={14} color={Colors.textSecondary} />
+            <Text style={styles.infoText} numberOfLines={1}>{user.email}</Text>
           </View>
-          {user.phone && (
-            <View style={styles.userInfoItem}>
-              <Ionicons name="call-outline" size={16} color={Colors.textSecondary} />
-              <Text style={styles.userInfoText}>{user.phone}</Text>
+          {user.phone ? (
+            <View style={styles.infoItem}>
+              <Ionicons name="call-outline" size={14} color={Colors.textSecondary} />
+              <Text style={styles.infoText}>{user.phone}</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Aircover banner */}
         <Pressable style={styles.aircoverBanner}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.aircoverTitle}>
-              Get <Text style={styles.aircoverBrand}>air</Text>
-              <Text style={styles.aircoverBrandBold}>cover</Text> from your profile
+              Get <Text style={{ fontStyle: 'italic' }}>air</Text>
+              <Text style={{ fontStyle: 'italic', fontWeight: '700' }}>cover</Text> protection
             </Text>
             <Text style={styles.aircoverSub}>
-              Every booking includes free protection from host cancellations, listing inaccuracies,
-              and other issues. Learn more
+              Every booking includes free protection from host cancellations and listing inaccuracies.
             </Text>
           </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
         </Pressable>
 
-        {/* Role-specific section */}
-        {roleRows.length > 0 && (
-          <SettingsSection
-            title={isAdmin ? 'Admin' : 'Hosting'}
-            rows={roleRows}
-          />
+        {/* Hosting / Admin */}
+        {hostRows.length > 0 && (
+          <SettingsSection title="Hosting" rows={hostRows} />
         )}
 
-        {/* Account settings */}
-        <SettingsSection title="Account Settings" rows={accountSettings} />
+        {/* Account settings — all wired to real screens */}
+        <SettingsSection title="Account settings" rows={accountSettings} />
 
         {/* Logout */}
         <View style={styles.section}>
           <View style={styles.sectionCard}>
             <Pressable style={styles.settingRow} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={22} color={Colors.brand} />
+              <View style={[styles.iconBox, { backgroundColor: '#fff0f3' }]}>
+                <Ionicons name="log-out-outline" size={20} color={Colors.brand} />
+              </View>
               <Text style={[styles.settingLabel, { color: Colors.brand }]}>Log out</Text>
+              <View style={{ flex: 1 }} />
             </Pressable>
           </View>
         </View>
@@ -220,80 +214,50 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
-
-  header: {
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
-  },
+  header: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   title: { fontSize: FontSize.xxl, fontWeight: '700', color: Colors.text },
 
-  // Guest card
-  guestCard: {
-    margin: Spacing.md, padding: Spacing.lg,
-    borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border,
-    gap: Spacing.sm, ...Shadow.sm,
-  },
+  // Guest
+  guestCard: { margin: Spacing.md, padding: Spacing.lg, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, gap: Spacing.sm, ...Shadow.sm },
   guestHeading: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   guestSub: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
-  loginBtn: {
-    backgroundColor: Colors.brand, borderRadius: Radius.lg,
-    paddingVertical: 14, alignItems: 'center', marginTop: Spacing.sm,
-  },
+  loginBtn: { backgroundColor: Colors.brand, borderRadius: Radius.lg, paddingVertical: 14, alignItems: 'center', marginTop: Spacing.sm },
   loginBtnText: { color: Colors.white, fontSize: FontSize.base, fontWeight: '700' },
   registerBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
   registerBtnText: { fontSize: FontSize.base, color: Colors.textSecondary },
 
   // User card
-  userCard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.lg,
-  },
-  userCardLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  userCard: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.lg, gap: Spacing.md },
   avatarWrap: { position: 'relative' },
-  userAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.backgroundSecondary },
+  userAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.backgroundSecondary },
   avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.brand },
-  avatarInitial: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.white },
-  superhostDot: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  avatarInitial: { fontSize: FontSize.xxl, fontWeight: '700', color: Colors.white },
+  superhostDot: { position: 'absolute', bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
   userName: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
   userSub: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-  superhostLabel: { fontSize: FontSize.xs, color: Colors.brand, fontWeight: '600', marginTop: 2 },
+  superhostBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0F0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full, alignSelf: 'flex-start', marginTop: 6 },
+  superhostText: { fontSize: FontSize.xs, color: Colors.brand, fontWeight: '600' },
 
   // Info row
-  userInfoRow: {
-    paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, gap: Spacing.sm,
-  },
-  userInfoItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  userInfoText: { fontSize: FontSize.sm, color: Colors.textSecondary, flex: 1 },
+  infoRow: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, gap: Spacing.sm },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  infoText: { fontSize: FontSize.sm, color: Colors.textSecondary, flex: 1 },
 
   // Aircover
-  aircoverBanner: {
-    marginHorizontal: Spacing.md, marginBottom: Spacing.md,
-    padding: Spacing.md, borderRadius: Radius.xl,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.white, ...Shadow.sm,
-  },
+  aircoverBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: Spacing.md, marginBottom: Spacing.md, padding: Spacing.md, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.white, gap: Spacing.sm, ...Shadow.sm },
   aircoverTitle: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
-  aircoverBrand: { fontStyle: 'italic', fontWeight: '400' },
-  aircoverBrandBold: { fontStyle: 'italic', fontWeight: '700' },
-  aircoverSub: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 6, lineHeight: 18 },
+  aircoverSub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 4, lineHeight: 16 },
 
   // Sections
   section: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.md },
-  sectionTitle: { fontSize: FontSize.lg, fontWeight: '600', color: Colors.text, marginBottom: Spacing.sm },
-  sectionCard: {
-    borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border,
-    overflow: 'hidden', backgroundColor: Colors.white,
-  },
-  settingRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: 16, gap: Spacing.md,
-  },
-  settingLabel: { flex: 1, fontSize: FontSize.base, color: Colors.text },
-  rowDivider: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 54 },
+  sectionTitle: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Spacing.sm },
+  sectionCard: { borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', backgroundColor: Colors.white },
+  settingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 14, gap: Spacing.md },
+  iconBox: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: Colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  iconBoxDanger: { backgroundColor: '#fff0f0' },
+  settingLabel: { fontSize: FontSize.base, fontWeight: '500', color: Colors.text },
+  settingSub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 1 },
+  rowDivider: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 64 },
 
-  version: { textAlign: 'center', fontSize: FontSize.xs, color: Colors.textLight, paddingBottom: Spacing.xl },
+  version: { textAlign: 'center', fontSize: FontSize.xs, color: Colors.textLight, paddingBottom: Spacing.xl, paddingTop: Spacing.sm },
 });
