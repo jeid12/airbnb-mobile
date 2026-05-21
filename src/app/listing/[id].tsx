@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   Platform,
   Pressable,
@@ -17,7 +18,7 @@ import { Colors, FontSize, Radius, Shadow, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { useListing } from '@/features/listings/hooks/useListing';
 import { useListingReviews } from '@/features/listings/hooks/useReviews';
-import { getListingImages, parseLocation, type ApiListingDetail, type ApiReview } from '@/services/api';
+import { api, getListingImages, parseLocation, type ApiListingDetail, type ApiReview } from '@/services/api';
 import Spinner from '@/shared/components/Spinner';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -118,6 +119,8 @@ export default function ListingDetailScreen() {
   const [imgIndex, setImgIndex] = useState(0);
   const [descExpanded, setDescExpanded] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
 
   if (isLoading) {
     return (
@@ -319,6 +322,41 @@ export default function ListingDetailScreen() {
             </>
           )}
 
+          {/* AI Review Summary */}
+          {reviews.length >= 3 && (
+            <>
+              {aiSummary ? (
+                <View style={styles.aiSummaryBox}>
+                  <View style={styles.aiSummaryHeader}>
+                    <Ionicons name="sparkles" size={16} color={Colors.brand} />
+                    <Text style={styles.aiSummaryTitle}>AI Review Summary</Text>
+                  </View>
+                  <Text style={styles.aiSummaryText}>{aiSummary}</Text>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.aiSummaryCta}
+                  disabled={aiSummaryLoading}
+                  onPress={async () => {
+                    setAiSummaryLoading(true);
+                    try {
+                      const res = await api.aiReviewSummary(listing.id);
+                      setAiSummary(res.summary);
+                    } catch { setAiSummary('Could not load AI summary.'); }
+                    finally { setAiSummaryLoading(false); }
+                  }}>
+                  {aiSummaryLoading
+                    ? <ActivityIndicator color={Colors.brand} size="small" />
+                    : <>
+                        <Ionicons name="sparkles-outline" size={16} color={Colors.brand} />
+                        <Text style={styles.aiSummaryCtaText}>Summarise reviews with AI</Text>
+                      </>}
+                </Pressable>
+              )}
+              <Divider />
+            </>
+          )}
+
           {/* Host card */}
           <Text style={styles.sectionHeading}>Hosted by {listing.host.name}</Text>
           <View style={styles.hostCard}>
@@ -337,9 +375,18 @@ export default function ListingDetailScreen() {
               )}
             </View>
           </View>
-          <Pressable style={styles.contactBtn}>
-            <Text style={styles.contactBtnText}>Contact Host</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+            <Pressable
+              style={[styles.contactBtn, { flex: 1 }]}
+              onPress={() => listing.host.id && router.push(`/messages/${listing.host.id}` as any)}>
+              <Text style={styles.contactBtnText}>Message Host</Text>
+            </Pressable>
+            <Pressable
+              style={styles.aiBtn}
+              onPress={() => router.push({ pathname: '/ai/chat', params: { listingId: listing.id } } as any)}>
+              <Ionicons name="sparkles" size={18} color={Colors.brand} />
+            </Pressable>
+          </View>
 
           <Divider />
 
@@ -430,6 +477,13 @@ const styles = StyleSheet.create({
   superhostText: { fontSize: FontSize.xs, color: Colors.brand, fontWeight: '600' },
   contactBtn: { paddingVertical: 12, paddingHorizontal: Spacing.md, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.text, alignItems: 'center' },
   contactBtnText: { fontSize: FontSize.base, fontWeight: '600', color: Colors.text },
+  aiBtn: { width: 44, height: 44, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: '#ffd6e0', backgroundColor: '#fff0f3', alignItems: 'center', justifyContent: 'center' },
+  aiSummaryBox: { backgroundColor: '#fff0f3', borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, marginBottom: Spacing.sm },
+  aiSummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  aiSummaryTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.brand },
+  aiSummaryText: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
+  aiSummaryCta: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
+  aiSummaryCtaText: { fontSize: FontSize.sm, color: Colors.brand, fontWeight: '600', textDecorationLine: 'underline' },
 
   reportRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.md },
   reportText: { fontSize: FontSize.sm, color: Colors.textSecondary, textDecorationLine: 'underline' },

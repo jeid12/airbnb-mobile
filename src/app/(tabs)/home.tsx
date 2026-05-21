@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -10,12 +10,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { debounce } from 'lodash';
 
 import { Colors, FontSize, Radius, Shadow, Spacing } from '@/constants/theme';
 import { categories } from '@/data/categories';
@@ -34,32 +32,19 @@ function formatPrice(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
-// ─── Debounced search pill ────────────────────────────────────────────────────
+// ─── Search pill (opens Explore) ─────────────────────────────────────────────
 function SearchPill({ onSearch }: { onSearch: () => void }) {
-  const { state, dispatch } = useStore();
-  const inputRef = useRef<TextInput>(null);
-
-  const debouncedDispatch = useCallback(
-    debounce((text: string) => dispatch({ type: 'SET_FILTER', payload: text }), 300),
-    [dispatch],
-  );
-
   return (
-    <View style={styles.searchPill}>
+    <Pressable style={styles.searchPill} onPress={() => router.push('/explore')}>
       <Ionicons name="search" size={18} color={Colors.text} />
-      <TextInput
-        ref={inputRef}
-        style={styles.searchInput}
-        placeholder="Where to?"
-        placeholderTextColor={Colors.textSecondary}
-        defaultValue={state.filter}
-        onChangeText={debouncedDispatch}
-        returnKeyType="search"
-      />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.searchPillTitle}>Where to?</Text>
+        <Text style={styles.searchPillSub}>Anywhere · Any week · Add guests</Text>
+      </View>
       <Pressable style={styles.filterBtn} onPress={onSearch}>
         <Ionicons name="options-outline" size={16} color={Colors.text} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -238,9 +223,12 @@ export default function HomeScreen() {
       )}
 
       <View style={styles.mapBtnWrap} pointerEvents="box-none">
-        <Pressable style={styles.mapBtn}>
-          <Text style={styles.mapBtnText}>Show map</Text>
-          <Ionicons name="map-outline" size={16} color={Colors.white} style={{ marginLeft: 6 }} />
+        <Pressable style={styles.mapBtn} onPress={() => router.push('/explore')}>
+          <Ionicons name="search-outline" size={16} color={Colors.white} />
+          <Text style={styles.mapBtnText}>Explore with AI</Text>
+        </Pressable>
+        <Pressable style={styles.aiFloatBtn} onPress={() => router.push('/ai/chat' as any)}>
+          <Ionicons name="sparkles" size={20} color={Colors.brand} />
         </Pressable>
       </View>
     </SafeAreaView>
@@ -257,6 +245,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 10,
     gap: Spacing.sm, ...Shadow.md,
   },
+  searchPillTitle: { fontSize: FontSize.base, fontWeight: '700', color: Colors.text },
+  searchPillSub: { fontSize: FontSize.xs, color: Colors.textSecondary },
   searchInput: { flex: 1, fontSize: FontSize.base, color: Colors.text },
   filterBtn: {
     width: 32, height: 32, borderRadius: 16,
@@ -295,7 +285,8 @@ const styles = StyleSheet.create({
   cardPrice: { fontSize: FontSize.base, marginTop: 2 },
   cardPriceBold: { fontWeight: '700', color: Colors.text },
   cardPriceNight: { color: Colors.text, fontWeight: '400' },
-  mapBtnWrap: { position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 80, left: 0, right: 0, alignItems: 'center' },
-  mapBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.backgroundDark, borderRadius: Radius.full, paddingHorizontal: Spacing.lg, paddingVertical: 12, ...Shadow.md },
+  mapBtnWrap: { position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 80, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md },
+  mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.backgroundDark, borderRadius: Radius.full, paddingHorizontal: Spacing.lg, paddingVertical: 12, ...Shadow.md },
   mapBtnText: { color: Colors.white, fontWeight: '600', fontSize: FontSize.base },
+  aiFloatBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', ...Shadow.md, borderWidth: 1, borderColor: '#ffd6e0' },
 });
