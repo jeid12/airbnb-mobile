@@ -35,6 +35,8 @@ export default function RootLayout() {
               <Stack.Screen name="host" options={{ headerShown: false }} />
               <Stack.Screen name="admin" options={{ headerShown: false }} />
               <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen name="messages" options={{ headerShown: false }} />
+              <Stack.Screen name="ai" options={{ headerShown: false }} />
             </Stack>
             <Toast />
           </AuthProvider>

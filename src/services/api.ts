@@ -68,6 +68,35 @@ export interface ApiListingItem {
 // Alias — detail endpoint returns same shape with more fields populated
 export type ApiListingDetail = ApiListingItem;
 
+export interface ApiMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  isRead: boolean;
+  listingId: string | null;
+  createdAt: string;
+  sender: { id: string; name: string; avatar: string | null };
+  receiver?: { id: string; name: string; avatar: string | null };
+}
+
+export interface AiChatResponse {
+  reply: string;
+  sessionId: string;
+}
+
+export interface AiSearchResponse {
+  data: ApiListingItem[];
+  filters: { location: string | null; type: string | null; maxPrice: number | null; guests: number | null };
+  meta: ApiMeta;
+}
+
+export interface AiReviewSummary {
+  summary: string;
+  positives: string[];
+  negatives: string[];
+}
+
 export interface ApiReview {
   id: string;
   rating: number;           // 1-5
@@ -330,17 +359,39 @@ export const api = {
     return request(`/users/${userId}/avatar`, { method: 'DELETE' }, token);
   },
 
+  // ── Messages ──────────────────────────────────────────────────────────────────
+
+  getConversations(token: string): Promise<ApiMessage[]> {
+    return request('/messages', {}, token);
+  },
+
+  getThread(token: string, peerId: string): Promise<ApiMessage[]> {
+    return request(`/messages/${peerId}`, {}, token);
+  },
+
+  sendMessage(token: string, data: { receiverId: string; content: string; listingId?: string }): Promise<ApiMessage> {
+    return request('/messages', { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+
+  markRead(token: string, messageId: string): Promise<ApiMessage> {
+    return request(`/messages/${messageId}/read`, { method: 'PATCH' }, token);
+  },
+
+  getUnreadCount(token: string): Promise<{ count: number }> {
+    return request('/messages/unread-count', {}, token);
+  },
+
   // ── AI ───────────────────────────────────────────────────────────────────────
 
-  aiSearch(query: string, page = 1, limit = 10): Promise<{ data: ApiListingItem[]; filters: object; meta: ApiMeta }> {
+  aiSearch(query: string, page = 1, limit = 10): Promise<AiSearchResponse> {
     return request(`/ai/search${qs({ page, limit })}`, {
       method: 'POST', body: JSON.stringify({ query }),
     });
   },
 
-  aiChat(sessionId: string, message: string, listingId?: string): Promise<{ reply: string; sessionId: string }> {
+  aiChat(sessionId: string, message: string, listingId?: string): Promise<AiChatResponse> {
     return request('/ai/chat', {
-      method: 'POST', body: JSON.stringify({ sessionId, message, listingId }),
+      method: 'POST', body: JSON.stringify({ sessionId, message, ...(listingId && { listingId }) }),
     });
   },
 
@@ -348,11 +399,11 @@ export const api = {
     return request('/ai/recommend', { method: 'POST' }, token);
   },
 
-  aiReviewSummary(listingId: string): Promise<{ summary: string }> {
+  aiReviewSummary(listingId: string): Promise<AiReviewSummary> {
     return request(`/ai/listings/${listingId}/review-summary`);
   },
 
-  aiGroupedListings(groupBy: 'location' | 'host' = 'location'): Promise<object> {
+  aiGroupedListings(groupBy: 'location' | 'host' = 'location'): Promise<{ groups: Array<{ key: string; label: string; count: number }> }> {
     return request(`/ai/listings/grouped${qs({ groupBy })}`);
   },
 };
